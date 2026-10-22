@@ -1,0 +1,54 @@
+# Fish inline history completion
+
+[简体中文](README.zh-CN.md)
+
+Search history by word prefixes, skipping intervening arguments. For example, `pod c e m` matches `podman compose exec -it mycontainer /bin/sh`. Preview the full command inline while completing only through the last matched word, then keep typing or accept the whole command.
+
+## Installation
+
+Requires Fish 4.0+ and `seq`. Place the complete [history_word_prefix.fish](history_word_prefix.fish) script in your Fish configuration directory's `conf.d/` folder, then add this to `config.fish`:
+
+```fish
+if status is-interactive
+    history_word_prefix_inline_bindings
+end
+```
+
+Open a new Fish session to activate it. To try it in the current session, run these commands from the script's directory:
+
+```fish
+source ./history_word_prefix.fish
+history_word_prefix_inline_bindings
+```
+
+Browsing stops at the ends by default. Use `history_word_prefix_inline_bindings --cycle` to cycle in both directions, including the original input. With cycling enabled, pressing ↓ first jumps to the oldest match. Call the binding function again to change the setting; use `--help` for help.
+
+## Usage
+
+Type `pod c` and press ↑. A preview might look like this, with `▏` marking the cursor and the highlighted remainder to its right:
+
+```text
+podman compose ▏logs
+```
+
+Type `e` to get `podman compose e▏`, then press ↑ again to match `podman compose exec ▏-it mycontainer /bin/sh`.
+
+| Key | Action |
+| --- | --- |
+| ↑ / ↓ | Browse matches, newest first; move toward older / newer entries |
+| → / End | Accept the whole preview without running it |
+| Typing, pasting, or other editing keys | Remove the preview remainder, then perform the original editing action |
+| Enter | By default, run only the completed prefix; press → or End first to run the whole command |
+| Esc / Ctrl-G | Cancel the preview and restore the original input and cursor |
+| Alt-D / Shift-Delete | Delete the full history entry behind the current preview and save history |
+
+Only text before the cursor is used for matching. Repeated ↑/↓ keeps the same query; after editing or moving the cursor, the next request starts a new search. If nothing matches, the original input stays intact.
+
+In normal editing, only the history-search branch of ↑/↓ in `default` and `insert` modes is replaced. Multiline editing searches on ↑ from the first line or ↓ from the last line; other lines retain vertical movement. Fish pager navigation stays intact. Tab, Shift-Tab, Ctrl-R, and other keys retain their original bindings, with the preview remainder removed before their actions run.
+
+Deletion uses an exact, case-sensitive full-command match and removes identical entries together. Cancelling the preview does not undo deletion. Prefer Alt-D: some terminals send Shift-Delete as plain Delete. Check with `fish_key_reader`.
+
+## Limitations
+
+- Matching is case-sensitive. The first word matches from the start of the command; later words must stay in order. Words are separated by whitespace, without parsing quotes or Fish syntax: `m` does not match `"mycontainer"`, and `sh` does not match `/bin/sh`.
+- The preview uses real command-line text and a selection, so plugins reading the buffer see the whole candidate. Search is triggered by ↑/↓ and does not refresh with every keystroke.
