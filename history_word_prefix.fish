@@ -304,7 +304,7 @@ function __hwi_delete
 end
 
 # Preserve the native up-or-search/down-or-search decisions for the pager and
-# multiline editing. Only their history branch enters our inline search.
+# multiline editing. Nonempty queries enter our inline history search.
 function __hwi_arrow --argument-names direction
     if commandline --paging-mode
         if test "$direction" = older
@@ -327,11 +327,27 @@ function __hwi_arrow --argument-names direction
             commandline --function end-selection
         end
     end
+    set -l native_search history-search-backward
+    if test "$direction" = newer
+        set native_search history-search-forward
+    end
+    # Once native history browsing starts, keep it native until Fish ends it.
+    if commandline --search-mode
+        commandline --function $native_search
+        return
+    end
     set -l line (commandline --line)
     set -l buffer (__hwp_buffer | string split0)
     set -l lines (string split -- \n "$buffer")
-    if commandline --search-mode; or test "$direction" = older -a "$line" -eq 1; or test "$direction" = newer -a "$line" -eq (count $lines)
-        __hwi_step "$direction"
+    if test "$direction" = older -a "$line" -eq 1; or test "$direction" = newer -a "$line" -eq (count $lines)
+        if string match --quiet --regex -- '\S' "$buffer"
+            __hwi_step "$direction"
+        else
+            # Whitespace is an empty query, rather than a literal search term.
+            __hwp_reset
+            commandline --replace -- ''
+            commandline --function $native_search
+        end
     else if test "$direction" = older
         commandline --function up-line
     else

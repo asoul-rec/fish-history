@@ -25,6 +25,8 @@ Browsing stops at the ends by default. Use `history_word_prefix_inline_bindings 
 
 ## Usage
 
+Empty or whitespace-only input uses Fish's native history browsing on ↑/↓, with the cursor at the end and Enter running the whole command. Whitespace is treated as empty input; word-prefix previews and cycling do not apply.
+
 Type `pod c` and press ↑. A preview might look like this, with `▏` marking the cursor and the highlighted remainder to its right:
 
 ```text
