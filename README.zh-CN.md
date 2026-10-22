@@ -54,3 +54,9 @@ podman compose ▏logs
 
 - 大小写敏感，首词从命令开头匹配，后续词保持顺序。按空白分词，不解析引号或 Fish 语法；`m` 不匹配 `"mycontainer"`，`sh` 不匹配 `/bin/sh`。
 - 预览是缓冲区中的真实文本和选区，读取命令行的插件会看到整条候选。匹配由 ↑/↓ 触发，不随每次输入自动刷新。
+
+## 测试
+
+GitHub Actions 在 Fish 4.1.2、4.5.0 和 4.9.3 上运行语法检查、启动检查和隔离历史的 PTY 交互测试，失败时保存终端日志。支持 push、Pull Request 和手动触发。
+
+本地在 Linux 上安装 Fish 和 Python 3 后运行 `python3 tests/test_history_word_prefix.py`；终端日志保存在 `test-logs/`，测试不修改用户历史。

@@ -54,3 +54,9 @@ Deletion uses an exact, case-sensitive full-command match and removes identical 
 
 - Matching is case-sensitive. The first word matches from the start of the command; later words must stay in order. Words are separated by whitespace, without parsing quotes or Fish syntax: `m` does not match `"mycontainer"`, and `sh` does not match `/bin/sh`.
 - The preview uses real command-line text and a selection, so plugins reading the buffer see the whole candidate. Search is triggered by ↑/↓ and does not refresh with every keystroke.
+
+## Tests
+
+GitHub Actions runs syntax checks, startup checks, and PTY interaction tests with isolated histories on Fish 4.1.2, 4.5.0, and 4.9.3. It runs on pushes, pull requests, and manual dispatch, saving terminal logs on failure.
+
+To run locally on Linux with Fish and Python 3 installed, use `python3 tests/test_history_word_prefix.py`. Terminal logs are saved in `test-logs/`; tests do not modify your history.

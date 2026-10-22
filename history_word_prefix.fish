@@ -366,6 +366,8 @@ function __hwi_editor_bindings --argument-names mode
     end
     bind --erase --all --user --preset --mode hwp_inline
     for binding in $bindings
+        # Newer Fish versions include source-location comments in bind output.
+        string match --quiet -- 'bind *' "$binding"; or continue
         printf '%s\0' "$binding" | read --null --local --tokenize --array parts
         __hwi_copy_binding $parts[2..-1]
     end
@@ -377,24 +379,17 @@ function __hwi_editor_bindings --argument-names mode
     bind --mode hwp_inline ctrl-g '__hwi_finish cancel'
     bind --mode hwp_inline shift-delete __hwi_delete
     bind --mode hwp_inline alt-d __hwi_delete
-    # Terminfo aliases may win over their named equivalents for legacy input.
-    bind --silent --mode hwp_inline --key up '__hwi_arrow older'
-    bind --silent --mode hwp_inline --key down '__hwi_arrow newer'
-    bind --silent --mode hwp_inline --key right '__hwi_accept forward-char'
-    bind --silent --mode hwp_inline --key end '__hwi_accept end-of-line'
-    bind --silent --mode hwp_inline --key sdc __hwi_delete
     set --global __hwi_bindings_mode "$mode"
     set --global __hwi_bindings_signature "$signature"
 end
 
 function __hwi_copy_binding
     argparse --stop-nonopt 'M/mode=' 'm/sets-mode=' k/key preset user s/silent -- $argv; or return
+    # Fish 4.0 also exports terminfo aliases. Inherit their named equivalents.
+    set --query _flag_key; and return
     set -l destination
     if set --query _flag_sets_mode
         set destination --sets-mode "$_flag_sets_mode"
-    end
-    if set --query _flag_key
-        set --append destination --key
     end
     set -l level --user
     if set --query _flag_preset

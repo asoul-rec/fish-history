@@ -1,0 +1,61 @@
+name: Fish tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Fish ${{ matrix.fish }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fish: "4.1.2"
+            sha256: 3d68eb2617fb1f07006723893f078784e37e7e2923d4bc61ab4654c2966fd369
+          - fish: "4.5.0"
+            sha256: a78d17517a6772a616d214a63f163ba8281c70834b71eeae9d1a37267e9e46d3
+          - fish: "4.9.3"
+            sha256: 8f643d10ad1abb0ef7072764c01ceb5cf61b2d373fda400cf60f0bad69b7e095
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install official Fish binary
+        env:
+          FISH_VERSION: ${{ matrix.fish }}
+          FISH_SHA256: ${{ matrix.sha256 }}
+        run: |
+          fish_bin_dir="$RUNNER_TEMP/fish"
+          fish_archive="$RUNNER_TEMP/fish.tar.xz"
+          mkdir -p "$fish_bin_dir"
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://github.com/fish-shell/fish-shell/releases/download/${FISH_VERSION}/fish-${FISH_VERSION}-linux-x86_64.tar.xz" \
+            --output "$fish_archive"
+          printf '%s  %s\n' "$FISH_SHA256" "$fish_archive" | sha256sum --check
+          tar -xJf "$fish_archive" -C "$fish_bin_dir" fish
+          printf '%s\n' "$fish_bin_dir" >> "$GITHUB_PATH"
+
+      - name: Check Fish syntax
+        run: |
+          fish --version
+          fish --no-config --no-execute history_word_prefix.fish
+
+      - name: Run terminal tests
+        env:
+          HWP_TEST_LOG_DIR: test-logs
+        run: python3 -u tests/test_history_word_prefix.py
+
+      - name: Save terminal logs on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: terminal-logs-fish-${{ matrix.fish }}
+          path: test-logs/
+          if-no-files-found: ignore
+          retention-days: 7
