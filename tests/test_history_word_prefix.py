@@ -673,6 +673,98 @@ def check_startup_bindings():
         print('Fresh configuration startup: 4 assertions passed')
 
 
+def check_custom_history_keys():
+    script = f'''source {fish_quote(SOURCE)}
+bind up 'commandline --insert UP'
+bind --mode insert up 'commandline --insert VI_UP'
+bind --sets-mode insert ctrl-p 'commandline --insert A' 'commandline --insert B'
+bind --mode insert ctrl-p 'commandline --insert VI_P'
+set -l saved (bind --user --mode default ctrl-p | string match -- 'bind *' | string collect)
+history_word_prefix_inline_bindings
+history_word_prefix_inline_bindings --older-key ctrl-p --newer-key ctrl-n --cycle
+string match --quiet '* UP*' (bind --user --mode default up); or exit 10
+string match --quiet '* VI_UP*' (bind --user --mode insert up); or exit 11
+history_word_prefix_inline_bindings --older-key '' 2>/dev/null
+test $status = 2; or exit 12
+history_word_prefix_inline_bindings --older-key ctrl-p --newer-key ctrl-p 2>/dev/null
+test $status = 2; or exit 13
+history_word_prefix_inline_bindings --newer-key 2>/dev/null
+test $status = 2; or exit 14
+history_word_prefix_inline_bindings --older-key ctrl- 2>/dev/null
+test $status = 2; or exit 22
+history_word_prefix_inline_bindings --help >/dev/null
+test "$__hwi_older_key" = ctrl-p; and test "$__hwi_newer_key" = ctrl-n; and test "$__hwi_cycle" = 1; or exit 15
+history_word_prefix_inline_bindings --older-key alt-k --newer-key alt-j
+test "$saved" = (bind --user --mode default ctrl-p | string match -- 'bind *' | string collect); or exit 16
+string match --quiet '* VI_P*' (bind --user --mode insert ctrl-p); or exit 17
+if bind --user --mode default ctrl-n >/dev/null 2>&1; exit 18; end
+bind alt-k 'commandline --insert MANUAL'
+history_word_prefix_inline_bindings
+string match --quiet '* MANUAL*' (bind --user --mode default alt-k); or exit 19
+if bind --user --mode default alt-j >/dev/null 2>&1; exit 20; end
+test "$__hwi_older_key" = up; and test "$__hwi_newer_key" = down; or exit 21
+'''
+    proc = subprocess.run(['fish', '--no-config', '--private', '-c', script],
+                          capture_output=True, check=True,
+                          env=dict(os.environ, TERM='xterm-256color'))
+    assert not proc.stderr, proc.stderr
+    checks = 13
+    with tempfile.TemporaryDirectory(prefix='hwp-custom-keys-') as directory:
+        shell = FishPTY(directory)
+        state_file = shell.directory / 'state'
+        try:
+            capture = (f'__hwp_buffer >> {fish_quote(shell.snapshots)}; '
+                       f'printf "%s %s\\n" (commandline --cursor) "$fish_bind_mode" >> {fish_quote(state_file)}')
+            shell.observe('ctrl-x', capture)
+
+            def expect(buffer, cursor=None, mode='hwp_inline'):
+                nonlocal checks
+                shell.expect(buffer)
+                state = state_file.read_text().splitlines()[-1].split()
+                assert int(state[0]) == (len(buffer) if cursor is None else cursor), state
+                assert state[1] == mode, state
+                checks += 1
+
+            shell.send(b'history_word_prefix_inline_bindings --older-key ctrl-p --newer-key ctrl-n --cycle\r')
+            old, logs = 'podman compose exec tail', 'podman compose logs'
+            query = b'pod c'
+            shell.load([old, logs])
+            shell.send(query + b'\x1b[A'); expect('pod c', mode='default')
+            shell.send(b'\x10'); expect(logs, len('podman compose '))
+            shell.send(b'\x10'); expect(old, len('podman compose '))
+            shell.send(b'\x0e'); expect(logs, len('podman compose '))
+            shell.send(b'\x0e'); expect('pod c')
+            shell.send(b'\x0e'); expect(old, len('podman compose '))
+            shell.send(b'\x1b'); shell.drain(0.1)
+            expect('pod c', mode='default')
+            shell.send(b'\x10\x1b[C'); expect(logs, mode='default')
+            # Empty input uses native history browsing on the configured keys.
+            shell.send(b'\x03')
+            shell.send(b'\x10'); expect(logs, mode='default')
+            shell.send(b'\x0e'); expect('', mode='default')
+            # Either flag can be used alone; swapped arrow keys also work.
+            for options, older, newer in [
+                ('--older-key alt-k', b'\x1bk', b'\x1b[B'),
+                ('--newer-key alt-j', b'\x1b[A', b'\x1bj'),
+                ('--older-key down --newer-key up', b'\x1b[B', b'\x1b[A'),
+                ('--older-key ctrl-k,ctrl-p --newer-key ctrl-k,ctrl-n', b'\x0b\x10', b'\x0b\x0e'),
+            ]:
+                shell.send(b'\x03')
+                shell.send(('history_word_prefix_inline_bindings ' + options).encode() + b'\r')
+                shell.load([old, logs])
+                shell.send(query + older); expect(logs, len('podman compose '))
+                shell.send(newer); expect('pod c')
+            shell.send(b'\x03')
+            shell.send(b'fish_vi_key_bindings insert; history_word_prefix_inline_bindings --older-key ctrl-p --newer-key ctrl-n\r')
+            shell.load([logs])
+            shell.send(query + b'\x10'); expect(logs, len('podman compose '))
+            shell.send(b'\x1b[C'); expect(logs, mode='insert')
+            print(f'Custom history keys: {checks} assertions passed')
+        finally:
+            (LOG_DIR / 'custom-keys-transcript.txt').write_bytes(shell.output)
+            shell.close()
+
+
 def check_options_and_editing():
     script = f'''source {fish_quote(SOURCE)}
 history_word_prefix_inline_bindings
@@ -768,3 +860,4 @@ if __name__ == '__main__':
     check_native_empty_queries()
     check_startup_bindings()
     check_options_and_editing()
+    check_custom_history_keys()

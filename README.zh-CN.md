@@ -23,6 +23,14 @@ history_word_prefix_inline_bindings
 
 默认到边界停止；使用 `history_word_prefix_inline_bindings --cycle` 开启双向循环，原输入也在循环内。循环开启时，最开始按 ↓ 会跳到最旧匹配。重复调用绑定函数可切换设置，`--help` 查看帮助。
 
+用 `--older-key` 和 `--newer-key` 修改键位，使用 Fish `bind` 的键名，默认分别为 `up` 和 `down`：
+
+```fish
+history_word_prefix_inline_bindings --older-key ctrl-p --newer-key ctrl-n --cycle
+```
+
+新键在普通编辑和预览中都生效。换键时恢复旧键的原绑定，保留期间手动修改的绑定；省略键位选项则恢复默认。下文 ↑/↓ 表示这两个配置键，其他按键保留原绑定。
+
 ## 使用
 
 输入为空或只有空白时，按 ↑/↓ 使用 Fish 原生历史浏览，光标停在命令末尾，Enter 执行整条命令；空白按空输入处理，不启用逐词预览或循环。
@@ -46,7 +54,7 @@ podman compose ▏logs
 
 匹配只使用光标前的文本。连续 ↑/↓ 沿用同一查询；编辑或移动光标后，下一次请求重新匹配。没有匹配时保留原输入。
 
-普通模式只替换 `default` 和 `insert` 模式的 ↑/↓ 历史搜索分支：多行编辑在首行按 ↑、末行按 ↓ 时搜索，其他行正常移动；Fish 列表导航保持原样。Tab、Shift-Tab、Ctrl-R 等按键保留原绑定，预览中先移除尾部再执行。
+普通模式只替换 `default` 和 `insert` 模式中所选键位的历史搜索分支：多行编辑在首行按 ↑、末行按 ↓ 时搜索，其他行正常移动；Fish 列表导航保持原样。其他按键在预览中先移除尾部再执行原绑定。
 
 删除按大小写敏感的全文精确匹配，相同记录一起删除，取消预览不会撤销删除。推荐 Alt-D：部分终端把 Shift-Delete 发成普通 Delete，可用 `fish_key_reader` 检查。
 

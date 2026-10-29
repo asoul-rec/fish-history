@@ -1,4 +1,4 @@
-# Fish 4.0+: source, then history_word_prefix_inline_bindings [--cycle].
+# Fish 4.0+: source, then history_word_prefix_inline_bindings [OPTIONS].
 # Matching uses whitespace-delimited words, not a shell parser.
 
 function __hwp_pattern --argument-names query
@@ -371,14 +371,14 @@ function __hwi_editor_bindings --argument-names mode
         printf '%s\0' "$binding" | read --null --local --tokenize --array parts
         __hwi_copy_binding $parts[2..-1]
     end
-    bind --mode hwp_inline up '__hwi_arrow older'
-    bind --mode hwp_inline down '__hwi_arrow newer'
     bind --mode hwp_inline right '__hwi_accept forward-char'
     bind --mode hwp_inline end '__hwi_accept end-of-line'
     bind --mode hwp_inline escape '__hwi_finish cancel'
     bind --mode hwp_inline ctrl-g '__hwi_finish cancel'
     bind --mode hwp_inline shift-delete __hwi_delete
     bind --mode hwp_inline alt-d __hwi_delete
+    bind --mode hwp_inline -- "$__hwi_older_key" '__hwi_arrow older'
+    bind --mode hwp_inline -- "$__hwi_newer_key" '__hwi_arrow newer'
     set --global __hwi_bindings_mode "$mode"
     set --global __hwi_bindings_signature "$signature"
 end
@@ -405,28 +405,76 @@ function __hwi_copy_binding
     bind $level --mode hwp_inline $destination -- "$key" '__hwi_finish prefix' $argv[2..-1]
 end
 
-# Only Up/Down change in normal editing. Looping is an explicit opt-in.
+# Restore only bindings that are still owned by this function.
+function __hwi_restore_bindings
+    set -l index 0
+    for mode in default insert
+        for key in $__hwi_bound_keys
+            set index (math "$index + 1")
+            set -l current (bind --user --mode "$mode" -- "$key" 2>/dev/null | string match -- 'bind *' | string collect)
+            if test "$current" != "$__hwi_owned_bindings[$index]"
+                continue
+            end
+            bind --erase --user --mode "$mode" -- "$key"
+            if test -n "$__hwi_saved_bindings[$index]"
+                printf '%s\0' "$__hwi_saved_bindings[$index]" | read --null --local --tokenize --array parts
+                bind $parts[2..-1]
+            end
+        end
+    end
+end
+
+# Only the two configured keys change in normal editing.
 function history_word_prefix_inline_bindings
-    argparse --name=history_word_prefix_inline_bindings c/cycle h/help -- $argv; or return 2
+    argparse --name=history_word_prefix_inline_bindings c/cycle h/help 'older-key=' 'newer-key=' -- $argv; or return 2
     if set --query _flag_help
-        printf '%s\n' 'Usage: history_word_prefix_inline_bindings [--cycle]' \
-            '  --cycle  Wrap through the original input (default: stop at the ends).'
+        printf '%s\n' 'Usage: history_word_prefix_inline_bindings [--cycle] [--older-key KEY] [--newer-key KEY]' \
+            '  --cycle          Wrap through the original input (default: stop at the ends).' \
+            '  --older-key KEY  Browse older matches (default: up).' \
+            '  --newer-key KEY  Browse newer matches (default: down).'
         return
     end
     if set --query argv[1]
         printf '%s\n' 'history_word_prefix_inline_bindings: unexpected argument' >&2
         return 2
     end
+    set -l older up
+    set -l newer down
+    set --query _flag_older_key; and set older "$_flag_older_key"
+    set --query _flag_newer_key; and set newer "$_flag_newer_key"
+    if test -z "$older"; or test -z "$newer"; or test "$older" = "$newer"
+        printf '%s\n' 'history_word_prefix_inline_bindings: keys must be nonempty and distinct' >&2
+        return 2
+    end
+    # Validate before changing any active bindings or preview state.
+    for key in "$older" "$newer"
+        bind --mode hwp_validate -- "$key" true
+        set -l result $status
+        bind --erase --all --user --mode hwp_validate
+        test "$result" -eq 0; or return 2
+    end
     __hwi_reset
     __hwp_reset
+    __hwi_restore_bindings
+    set --global __hwi_older_key "$older"
+    set --global __hwi_newer_key "$newer"
+    set --global __hwi_bound_keys "$older" "$newer"
+    set --global __hwi_saved_bindings
+    set --global __hwi_owned_bindings
     set --global __hwi_cycle 0
     if set --query _flag_cycle
         set --global __hwi_cycle 1
     end
     set --erase __hwi_bindings_mode __hwi_bindings_signature
     for mode in default insert
-        bind --mode $mode up '__hwi_arrow older'
-        bind --mode $mode down '__hwi_arrow newer'
+        for direction in older newer
+            set -l key "$older"
+            test "$direction" = newer; and set key "$newer"
+            set -l previous (bind --user --mode "$mode" -- "$key" 2>/dev/null | string match -- 'bind *' | string collect)
+            set --global --append __hwi_saved_bindings "$previous"
+            bind --mode "$mode" -- "$key" "__hwi_arrow $direction"
+            set --global --append __hwi_owned_bindings (bind --user --mode "$mode" -- "$key" | string match -- 'bind *' | string collect)
+        end
     end
     __hwi_editor_bindings "$fish_bind_mode"
 end

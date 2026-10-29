@@ -23,6 +23,14 @@ history_word_prefix_inline_bindings
 
 Browsing stops at the ends by default. Use `history_word_prefix_inline_bindings --cycle` to cycle in both directions, including the original input. With cycling enabled, pressing ↓ first jumps to the oldest match. Call the binding function again to change the setting; use `--help` for help.
 
+Use `--older-key` and `--newer-key` to choose keys using Fish `bind` names. They default to `up` and `down`:
+
+```fish
+history_word_prefix_inline_bindings --older-key ctrl-p --newer-key ctrl-n --cycle
+```
+
+The keys work in both normal editing and previews. Changing keys restores their previous bindings while preserving any manual edits made since setup. Omitting the key options restores the defaults. Below, ↑/↓ refer to these two configured keys; other keys retain their original bindings.
+
 ## Usage
 
 Empty or whitespace-only input uses Fish's native history browsing on ↑/↓, with the cursor at the end and Enter running the whole command. Whitespace is treated as empty input; word-prefix previews and cycling do not apply.
@@ -46,7 +54,7 @@ Type `e` to get `podman compose e▏`, then press ↑ again to match `podman com
 
 Only text before the cursor is used for matching. Repeated ↑/↓ keeps the same query; after editing or moving the cursor, the next request starts a new search. If nothing matches, the original input stays intact.
 
-In normal editing, only the history-search branch of ↑/↓ in `default` and `insert` modes is replaced. Multiline editing searches on ↑ from the first line or ↓ from the last line; other lines retain vertical movement. Fish pager navigation stays intact. Tab, Shift-Tab, Ctrl-R, and other keys retain their original bindings, with the preview remainder removed before their actions run.
+In normal editing, only the history-search branch of the chosen keys in `default` and `insert` modes is replaced. Multiline editing searches on ↑ from the first line or ↓ from the last line; other lines retain vertical movement. Fish pager navigation stays intact. Other keys run their original actions after removing the preview remainder.
 
 Deletion uses an exact, case-sensitive full-command match and removes identical entries together. Cancelling the preview does not undo deletion. Prefer Alt-D: some terminals send Shift-Delete as plain Delete. Check with `fish_key_reader`.
 
