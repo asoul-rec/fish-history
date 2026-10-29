@@ -25,6 +25,7 @@ def fish_quote(value):
 
 
 def check_matcher():
+    with_env = 'PATH=/bin LD_LIBRARY_PATH=/lib podman compose ps'
     cases = [
         ('podman c e m', [
             'podman compose exec -it mycontainer /bin/sh',
@@ -43,6 +44,19 @@ def check_matcher():
         ('', ['one', 'two\nthree\n'], [0, 1]),
         ('tool /b', ['tool /bin/sh', 'tool bin/sh'], [0]),
         ('podman c e m', ['podman compose exec "mycontainer"'], []),
+        ('p c ps', [with_env], [0]),
+        ('PATH p c', [with_env], [0]),
+        ('P L ps', [with_env], [0]),
+        ('L P', [with_env], []),
+        ('c ps', [with_env, 'podman compose ps', 'PATH=/bin podman OPT=yes compose ps'], []),
+        ('L p', [with_env], [0]),
+        ('L P', ['LD_LIBRARY_PATH=/lib PATH=/bin podman compose ps'], [0]),
+        ('p c ps', ['PATH=/bin sudo podman compose ps', 'echo PATH=/bin podman compose ps'], []),
+        ('p c ps', ['PATH=/bin podman OPT=yes compose ps'], [0]),
+        ('p c ps', [' \tPATH=/bin\nLD_LIBRARY_PATH=/lib\tpodman compose ps\n'], [0]),
+        ('p c ps', ['=/bin EMPTY= EXTRA=a=b podman compose ps'], [0]),
+        ('PATH PATH', [with_env], []),
+        ('ps', [with_env], []),
     ]
     for query, commands, indexes in cases:
         proc = subprocess.run(
@@ -60,6 +74,8 @@ def check_matcher():
 
 
 def check_prefixes():
+    with_env = 'PATH=/bin LD_LIBRARY_PATH=/lib podman compose ps --all'
+    env_prefix = 'PATH=/bin LD_LIBRARY_PATH=/lib '
     cases = [
         ('pod c', 'podman compose logs', 'podman compose'),
         ('pod c', 'podman exec mycontainer cat file', 'podman exec mycontainer cat'),
@@ -71,6 +87,13 @@ def check_prefixes():
         ('pod c', 'podman\ncompose logs', 'podman\ncompose'),
         ('', 'podman compose logs', 'podman'),
         ('工 子', '工具 子命令 其他', '工具 子命令'),
+        ('p c', with_env, env_prefix + 'podman compose'),
+        ('PATH p c', with_env, env_prefix + 'podman compose'),
+        ('P L ps', with_env, env_prefix + 'podman compose ps'),
+        ('L', with_env, env_prefix.rstrip()),
+        ('P', 'PATH=/bin PROGRAM=release podman compose ps', 'PATH=/bin'),
+        ('p c', ' \tPATH=/bin\nLD_LIBRARY_PATH=/lib\tpodman compose ps',
+         ' \tPATH=/bin\nLD_LIBRARY_PATH=/lib\tpodman compose'),
     ]
     for query, candidate, expected in cases:
         proc = subprocess.run(
@@ -282,6 +305,58 @@ def check_inline():
             print(f'Inline preview PTY: {checks} assertions passed')
         finally:
             (LOG_DIR / 'inline-transcript.txt').write_bytes(shell.output)
+            shell.close()
+
+
+def check_leading_assignments():
+    with tempfile.TemporaryDirectory(prefix='hwp-assignments-') as directory:
+        shell = FishPTY(directory)
+        state_file = shell.directory / 'state'
+        checks = 0
+        try:
+            shell.send(b'history_word_prefix_inline_bindings\r')
+            capture = (f'__hwp_buffer >> {fish_quote(shell.snapshots)}; '
+                       f'printf "%s %s\\n" (commandline --cursor) "$fish_bind_mode" >> {fish_quote(state_file)}')
+            shell.observe('ctrl-x', capture)
+
+            def expect(buffer, cursor=None, mode='hwp_inline'):
+                nonlocal checks
+                shell.expect(buffer)
+                state = state_file.read_text().splitlines()[-1].split()
+                assert int(state[0]) == (len(buffer) if cursor is None else cursor), state
+                assert state[1] == mode, state
+                checks += 1
+
+            env_prefix = 'PATH=/bin LD_LIBRARY_PATH=/lib '
+            command = env_prefix + 'podman compose ps --all'
+            plain = 'podman compose logs'
+            shell.load([plain, command])
+            for query, prefix in [
+                ('p c ps', env_prefix + 'podman compose ps '),
+                ('PATH p c', env_prefix + 'podman compose '),
+                ('P L ps', env_prefix + 'podman compose ps '),
+                ('L p', env_prefix + 'podman '),
+            ]:
+                shell.send(query.encode() + b'\x1b[A'); expect(command, len(prefix))
+                shell.send(b'\x1b'); shell.drain(0.1)
+                expect(query, mode='default')
+                shell.send(b'\x03')
+            for query in ['L P', 'c ps']:
+                shell.send(query.encode() + b'\x1b[A'); expect(query, mode='default')
+                shell.send(b'\x03')
+            # Completing and editing preserve the skipped environment words.
+            shell.send(b'p c\x1b[Aps')
+            expect(env_prefix + 'podman compose ps', mode='default')
+            shell.send(b'\x1b[A'); expect(command, len(env_prefix + 'podman compose ps '))
+            shell.send(b'\x1b[C'); expect(command, mode='default')
+            # Deletion still uses the original full history entry.
+            shell.send(b'\x03')
+            shell.send(b'p c\x1b[A\x1bd'); expect(plain, len('podman compose '))
+            shell.send(b'\x03')
+            shell.send(b'p c ps\x1b[A'); expect('p c ps', mode='default')
+            print(f'Leading assignments PTY: {checks} assertions passed')
+        finally:
+            (LOG_DIR / 'assignments-transcript.txt').write_bytes(shell.output)
             shell.close()
 
 
@@ -854,6 +929,7 @@ if __name__ == '__main__':
     check_matcher()
     check_prefixes()
     check_inline()
+    check_leading_assignments()
     check_delete()
     check_cycles()
     check_arrow_contexts()

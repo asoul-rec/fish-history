@@ -54,13 +54,15 @@ Type `e` to get `podman compose e▏`, then press ↑ again to match `podman com
 
 Only text before the cursor is used for matching. Repeated ↑/↓ keeps the same query; after editing or moving the cursor, the next request starts a new search. If nothing matches, the original input stays intact.
 
+Leading words containing `=` may be skipped or included in matching. For example, `PATH=/bin LD_LIBRARY_PATH=/lib podman compose ps` matches `p c ps`, `PATH p c`, and `P L ps`, but not `L P` or `c ps`. Only these leading words may be skipped before the first match; completion preserves the full environment settings.
+
 In normal editing, only the history-search branch of the chosen keys in `default` and `insert` modes is replaced. Multiline editing searches on ↑ from the first line or ↓ from the last line; other lines retain vertical movement. Fish pager navigation stays intact. Other keys run their original actions after removing the preview remainder.
 
 Deletion uses an exact, case-sensitive full-command match and removes identical entries together. Cancelling the preview does not undo deletion. Prefer Alt-D: some terminals send Shift-Delete as plain Delete. Check with `fish_key_reader`.
 
 ## Limitations
 
-- Matching is case-sensitive. The first word matches from the start of the command; later words must stay in order. Words are separated by whitespace, without parsing quotes or Fish syntax: `m` does not match `"mycontainer"`, and `sh` does not match `/bin/sh`.
+- Matching is case-sensitive. The first word matches from the start of the command, optionally skipping leading words containing `=`; later words must stay in order. Words are separated by whitespace, without parsing quotes or Fish syntax: `m` does not match `"mycontainer"`, and `sh` does not match `/bin/sh`.
 - The preview uses real command-line text and a selection, so plugins reading the buffer see the whole candidate. Search is triggered by ↑/↓ and does not refresh with every keystroke.
 
 ## Tests

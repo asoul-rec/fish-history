@@ -5,7 +5,9 @@ function __hwp_pattern --argument-names query
     set -l words (string match --all --regex '\S+' -- "$query")
     set -l escaped (string escape --style=regex -- $words)
     set -l joined (string join '.*?\s+' -- $escaped)
-    printf '%s%s\n' '(?s)^\s*' "$joined"
+    # Only leading words containing '=' may be skipped before the first match.
+    # Prefer matching an earlier assignment over skipping it when both work.
+    printf '%s%s\n' '(?s)^\s*(?:[^\s=]*=\S*\s+)*?' "$joined"
 end
 
 function __hwp_reset --on-event fish_prompt --on-event fish_preexec
